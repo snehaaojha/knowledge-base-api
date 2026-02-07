@@ -73,6 +73,19 @@ def test_search_mocked(embed_mock, query_mock):
     assert results[0]["text"] == "match"
 
 
+def test_ingest_raises_on_embedding_count_mismatch():
+    """Ingest raises EmbeddingError when embed_texts returns wrong count."""
+    from app.exceptions import EmbeddingError
+
+    with patch("app.service.embed_texts") as embed_mock:
+        embed_mock.return_value = [[0.1] * 384]  # Only 1 vector for 2 chunks
+        with patch("app.service.chunk_text_sentences") as chunk_mock:
+            chunk_mock.return_value = ["chunk one", "chunk two"]
+            with pytest.raises(EmbeddingError, match="mismatch"):
+                from app.service import ingest_text
+                ingest_text("x", doc_id="test")
+
+
 @patch("app.service.query_vectors")
 @patch("app.service.embed_single")
 def test_search_handles_malformed_endee_response(embed_mock, query_mock):

@@ -8,10 +8,11 @@ request_id_ctx: ContextVar[str] = ContextVar("request_id", default="")
 
 
 class RequestIdFilter(logging.Filter):
-    """Add request_id to log records when present."""
+    """Add request_id to log records when present. Safe for non-request contexts."""
 
     def filter(self, record: logging.LogRecord) -> bool:
-        record.request_id = request_id_ctx.get() or "-"
+        if not hasattr(record, "request_id"):
+            record.request_id = request_id_ctx.get() or "-"
         return True
 
 

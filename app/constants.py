@@ -1,0 +1,9 @@
+"""Application constants to avoid magic numbers."""
+
+MAX_CHUNK_CHARS = 512
+MAX_INGEST_CHARS = 1_000_000
+MAX_QUERY_CHARS = 10_000
+MIN_TOP_K = 1
+MAX_TOP_K = 50
+MAX_DOC_ID_LEN = 256
+META_SANITIZE_MAX_DEPTH = 10

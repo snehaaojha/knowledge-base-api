@@ -5,6 +5,7 @@ from unittest.mock import patch, MagicMock
 
 from fastapi.testclient import TestClient
 
+from app.exceptions import EmbeddingError, VectorStoreTimeoutError
 from app.main import app
 
 
@@ -166,3 +167,30 @@ def test_response_includes_request_id(client: TestClient):
 def test_request_id_from_header_propagated(client: TestClient):
     resp = client.get("/", headers={"X-Request-ID": "custom-id-123"})
     assert resp.headers["X-Request-ID"] == "custom-id-123"
+
+
+def test_validation_error_returns_422_with_detail(client: TestClient):
+    """Validation errors return 422 with structured detail."""
+    resp = client.post("/api/v1/ingest", json={"text": "", "doc_id": "x"})
+    assert resp.status_code == 422
+    data = resp.json()
+    assert "detail" in data
+    assert "message" in data or "detail" in data
+
+
+def test_ingest_returns_504_on_timeout(client: TestClient, mock_endee, mock_embeddings):
+    """Vector store timeout returns 504 Gateway Timeout."""
+    with patch("app.service.ingest_text") as mock_ingest:
+        mock_ingest.side_effect = VectorStoreTimeoutError("timed out")
+        resp = client.post("/api/v1/ingest", json={"text": "Hello world."})
+    assert resp.status_code == 504
+    detail = resp.json().get("detail", "")
+    assert "timeout" in detail.lower() or "timed out" in detail.lower()
+
+
+def test_search_returns_504_on_timeout(client: TestClient, mock_endee, mock_embeddings):
+    """Vector store timeout on search returns 504."""
+    with patch("app.service.search") as mock_search:
+        mock_search.side_effect = VectorStoreTimeoutError("timed out")
+        resp = client.post("/api/v1/search", json={"query": "test", "top_k": 5})
+    assert resp.status_code == 504

@@ -5,8 +5,10 @@ import re
 import uuid
 
 from app.config import settings
+from app.constants import MAX_CHUNK_CHARS, META_SANITIZE_MAX_DEPTH
 from app.db import generate_chunk_id, query_vectors, upsert_vectors
 from app.embeddings import embed_single, embed_texts
+from app.exceptions import EmbeddingError, ServiceError
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +19,7 @@ def chunk_text_sentences(text: str, chunk_size: int | None = None) -> list[str]:
     Enforces max 512 chars per chunk to avoid embedding model overflow.
     """
     size = chunk_size or settings.chunk_size
-    max_chunk = min(size, 512)
+    max_chunk = min(size, MAX_CHUNK_CHARS)
     sentences = re.split(r'(?<=[.!?])\s+', text.strip())
     if not sentences:
         return [text.strip()] if text.strip() else []
@@ -61,9 +63,14 @@ def ingest_text(text: str, doc_id: str | None = None) -> dict:
     doc_id = doc_id or str(uuid.uuid4())
     chunks = chunk_text_sentences(text)
     if not chunks:
+        logger.debug("Ingest skipped: empty chunks for doc_id=%s", doc_id)
         return {"doc_id": doc_id, "chunks_stored": 0}
     logger.info("Ingestion started for doc_id=%s, chunks=%d", doc_id, len(chunks))
     vectors = embed_texts(chunks)
+    if len(vectors) != len(chunks):
+        raise EmbeddingError(
+            f"Embedding count mismatch: got {len(vectors)} vectors for {len(chunks)} chunks"
+        )
     items = []
     for i, (chunk, vec) in enumerate(zip(chunks, vectors)):
         cid = generate_chunk_id(doc_id, i)
@@ -79,7 +86,7 @@ def ingest_text(text: str, doc_id: str | None = None) -> dict:
 
 def _sanitize_meta(obj: object, _depth: int = 0, _seen: frozenset | None = None) -> object:
     """Ensure meta is JSON-serializable. Guards against recursion/circular refs."""
-    if _depth > 10:
+    if _depth > META_SANITIZE_MAX_DEPTH:
         return "[max depth]"
     if obj is None or isinstance(obj, (bool, int, float, str)):
         return obj
@@ -101,6 +108,7 @@ def search(query: str, top_k: int = 5) -> list[dict]:
     """
     top_k = min(top_k, settings.max_top_k)
     logger.info("Search started: query=%r, top_k=%d", query[:50], top_k)
+    logger.debug("Search query length=%d", len(query))
     query_vector = embed_single(query)
     raw = query_vectors(vector=query_vector, top_k=top_k)
     results = []

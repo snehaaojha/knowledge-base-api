@@ -66,7 +66,7 @@ bash scripts/test.sh
 python -m pytest -v
 ```
 
-These tests mock Endee and embeddings. You should see multiple tests pass (e.g. 25+).
+These tests mock Endee and embeddings. You should see 34+ tests pass.
 
 ### Excluding integration tests
 
@@ -90,11 +90,13 @@ If Endee is not running on port 8080, these tests are automatically skipped.
 
 ## Test Structure
 
-| Location            | Purpose                                           |
-|---------------------|---------------------------------------------------|
-| `tests/test_api.py` | HTTP endpoint tests; mocks Endee and embeddings   |
-| `tests/test_service.py` | Chunking, ingest/search logic; mocked deps   |
-| `tests/test_integration.py` | End-to-end with real Endee; skipped if Endee unavailable |
+| Location                  | Purpose                                                       |
+|---------------------------|---------------------------------------------------------------|
+| `tests/test_api.py`       | HTTP endpoint tests; mocks Endee and embeddings               |
+| `tests/test_service.py`   | Chunking, ingest/search logic; mocked deps                    |
+| `tests/test_main.py`      | _json_safe and exception handler helpers                      |
+| `tests/test_middleware.py`| Request ID propagation in isolation                           |
+| `tests/test_integration.py` | End-to-end with real Endee; skipped if Endee unavailable   |
 
 ---
 

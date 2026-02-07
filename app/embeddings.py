@@ -5,6 +5,7 @@ import threading
 from typing import TYPE_CHECKING
 
 from app.config import settings
+from app.exceptions import EmbeddingError
 
 if TYPE_CHECKING:
     from sentence_transformers import SentenceTransformer
@@ -38,14 +39,25 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
         return []
     model = get_embedding_model()
     vectors = model.encode(texts, convert_to_numpy=True)
-    return [v.tolist() for v in vectors]
+    result = [v.tolist() for v in vectors]
+    for i, vec in enumerate(result):
+        if len(vec) != settings.embedding_dimension:
+            raise EmbeddingError(
+                f"Chunk {i}: unexpected dimension {len(vec)}, expected {settings.embedding_dimension}"
+            )
+    return result
 
 
 def embed_single(text: str) -> list[float]:
     """Generate embedding for a single text."""
     if not text or not text.strip():
-        raise ValueError("Text must be non-empty")
+        raise EmbeddingError("Text must be non-empty")
     vectors = embed_texts([text])
     if not vectors:
-        raise ValueError("Embedding failed")
-    return vectors[0]
+        raise EmbeddingError("Embedding failed")
+    vec = vectors[0]
+    if len(vec) != settings.embedding_dimension:
+        raise EmbeddingError(
+            f"Unexpected dimension: got {len(vec)}, expected {settings.embedding_dimension}"
+        )
+    return vec

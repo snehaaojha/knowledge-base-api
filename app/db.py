@@ -9,6 +9,7 @@ from typing import Any, Callable, TypeVar
 from endee import Endee, Precision
 
 from app.config import settings
+from app.exceptions import VectorStoreError, VectorStoreTimeoutError
 
 T = TypeVar("T")
 
@@ -16,9 +17,12 @@ T = TypeVar("T")
 def _with_timeout(func: Callable[[], T], timeout_seconds: int | None = None) -> T:
     """Run a sync callable with a timeout to avoid hanging on Endee failures."""
     timeout = timeout_seconds if timeout_seconds is not None else settings.endee_timeout_seconds
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
-        future = ex.submit(func)
-        return future.result(timeout=timeout)
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+            future = ex.submit(func)
+            return future.result(timeout=timeout)
+    except concurrent.futures.TimeoutError as e:
+        raise VectorStoreTimeoutError(f"Endee operation timed out after {timeout}s") from e
 
 logger = logging.getLogger(__name__)
 
@@ -78,9 +82,11 @@ def _ensure_index_impl() -> None:
 
     try:
         _with_timeout(_do)
+    except VectorStoreTimeoutError:
+        raise
     except Exception as e:
         logger.error("Failed to ensure index: %s", e)
-        raise
+        raise VectorStoreError(f"Failed to ensure index: {e}") from e
 
 
 def get_index() -> Any:
@@ -90,7 +96,13 @@ def get_index() -> Any:
     def _do() -> Any:
         return get_endee_client().get_index(name=settings.index_name)
 
-    return _with_timeout(_do)
+    try:
+        return _with_timeout(_do)
+    except VectorStoreTimeoutError:
+        raise
+    except Exception as e:
+        logger.error("get_index failed: %s", e)
+        raise VectorStoreError(f"get_index failed: {e}") from e
 
 
 def upsert_vectors(items: list[dict[str, Any]]) -> None:
@@ -100,7 +112,13 @@ def upsert_vectors(items: list[dict[str, Any]]) -> None:
     def _do() -> None:
         index.upsert(items)
 
-    _with_timeout(_do)
+    try:
+        _with_timeout(_do)
+    except VectorStoreTimeoutError:
+        raise
+    except Exception as e:
+        logger.error("Upsert failed: %s", e)
+        raise VectorStoreError(f"Upsert failed: {e}") from e
     logger.info("Upserted %d vectors to index %s", len(items), settings.index_name)
 
 
@@ -112,7 +130,13 @@ def query_vectors(vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
         results = index.query(vector=vector, top_k=top_k)
         return list(results) if results else []
 
-    return _with_timeout(_do)
+    try:
+        return _with_timeout(_do)
+    except VectorStoreTimeoutError:
+        raise
+    except Exception as e:
+        logger.error("Query failed: %s", e)
+        raise VectorStoreError(f"Query failed: {e}") from e
 
 
 def generate_chunk_id(doc_id: str, chunk_index: int) -> str:

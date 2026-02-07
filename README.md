@@ -27,7 +27,7 @@ A production-style semantic search application using **Endee** as the vector dat
    bash scripts/test.sh
    ```
 
-   You should see `21 passed`. Done.
+   You should see `34 passed` (or more). Done.
 
 ---
 
@@ -62,16 +62,19 @@ A production-style semantic search application using **Endee** as the vector dat
 ```
 sneha/
 ├── app/              # Application code
-│   ├── main.py       # FastAPI app, logging, routes
-│   ├── api.py        # HTTP endpoints
-│   ├── service.py    # Business logic
-│   ├── db.py         # Endee vector DB
+│   ├── main.py       # FastAPI app, CORS, logging, exception handlers
+│   ├── api.py        # HTTP endpoints (ingest, search, health)
+│   ├── service.py    # Business logic, chunking, orchestration
+│   ├── db.py         # Endee vector DB, timeouts
 │   ├── embeddings.py # Embedding generation
 │   ├── schemas.py    # Pydantic models
 │   ├── config.py     # Environment config
-│   └── middleware.py # Request ID
+│   ├── middleware.py # Request ID propagation
+│   ├── exceptions.py # ServiceError, EmbeddingError, VectorStoreTimeoutError
+│   └── constants.py  # MAX_CHUNK_CHARS, limits
 ├── scripts/          # setup, run, test, docker, start-endee-from-fork
-├── tests/
+├── tests/            # test_api, test_service, test_main, test_middleware, test_integration
+├── CONTRIBUTING.md   # Setup and test instructions
 ├── requirements.txt
 ├── Dockerfile
 ├── docker-compose.yml
@@ -163,14 +166,17 @@ Organizations need to search large document collections by *meaning*, not just k
 
 **Module responsibilities:**
 
-| Module      | Responsibility                                      |
-|------------|------------------------------------------------------|
-| `main.py`  | App startup, logging, validation error handling      |
-| `api.py`   | HTTP routes (ingest, search, health)                 |
-| `service.py` | Chunking, orchestration of ingest and search       |
-| `embeddings.py` | Embedding generation (sentence-transformers)    |
-| `db.py`    | Endee index creation, upsert, query                  |
-| `schemas.py` | Request/response Pydantic models                   |
+| Module        | Responsibility                                                |
+|---------------|---------------------------------------------------------------|
+| `main.py`     | App startup, CORS, logging, validation/exception handlers     |
+| `api.py`      | HTTP routes (ingest, search, health); 504 on timeout          |
+| `service.py`  | Chunking, orchestration of ingest and search                  |
+| `embeddings.py` | Embedding generation (sentence-transformers)                |
+| `db.py`       | Endee index creation, upsert, query, timeouts                 |
+| `schemas.py`  | Request/response Pydantic models                              |
+| `middleware.py` | Request ID from header or generated; propagates to response |
+| `exceptions.py` | ServiceError, EmbeddingError, VectorStoreTimeoutError       |
+| `constants.py`  | MAX_CHUNK_CHARS, META_SANITIZE_MAX_DEPTH                      |
 
 ---
 
@@ -178,7 +184,7 @@ Organizations need to search large document collections by *meaning*, not just k
 
 1. Client sends text (or document content) via `POST /api/v1/ingest` or `POST /api/v1/ingest/document`.
 2. **Validation**: Pydantic ensures non-empty input; empty input returns `422`.
-3. **Chunking**: Text is split into overlapping chunks (sentence-aware) to fit embedding model limits.
+3. **Chunking**: Text is split into sentence-aware chunks (max 512 chars) to fit embedding model limits.
 4. **Embedding**: Each chunk is embedded using `all-MiniLM-L6-v2` (384 dimensions).
 5. **Storage**: Chunks and metadata (text, doc_id, chunk_index) are upserted into Endee.
 6. Response returns `doc_id` and `chunks_stored`.
@@ -197,14 +203,15 @@ Organizations need to search large document collections by *meaning*, not just k
 
 ## Error Handling
 
-| Scenario           | HTTP Status | Behavior                                      |
-|-------------------|-------------|-----------------------------------------------|
-| Empty text/query   | 422         | Validation error with clear message           |
-| Invalid format     | 422         | Pydantic validation details in response       |
-| Text/query too long| 422         | text/content max 1M chars, query max 10k      |
-| DB connection fail | 500         | Generic "Ingestion failed" / "Search failed"  |
-| Embedding failure  | 500         | Generic message; full error logged server-side|
-| Health check       | 200         | Returns `degraded` if DB or embedding fails   |
+| Scenario            | HTTP Status | Behavior                                      |
+|---------------------|-------------|-----------------------------------------------|
+| Empty text/query    | 422         | Validation error with clear message           |
+| Invalid format      | 422         | Pydantic validation details in response       |
+| Text/query too long | 422         | text/content max 1M chars, query max 10k      |
+| DB connection fail  | 500         | Generic "Ingestion failed" / "Search failed"  |
+| Embedding failure   | 500         | Generic message; full error logged server-side|
+| Endee timeout       | 504         | "Vector store request timed out"              |
+| Health check        | 200         | Returns `degraded` if DB or embedding fails   |
 
 Errors are logged with structured logging; clients receive generic messages only.
 
@@ -219,50 +226,7 @@ Errors are logged with structured logging; clients receive generic messages only
 
 ---
 
-## How to Run Locally
-
-### Prerequisites
-
-- Python 3.10+
-- [Endee API token](https://endee.io) (required only for running the API; tests use mocks)
-
-### Quick Setup
-
-```bash
-# Windows
-scripts\setup.bat
-venv\Scripts\activate
-scripts\run.bat
-
-# Linux/Mac
-./scripts/setup.sh
-source venv/bin/activate
-./scripts/run.sh
-```
-
-Or manually:
-
-```bash
-python -m venv venv
-# Windows: venv\Scripts\activate
-# Linux/Mac: source venv/bin/activate
-pip install -r requirements.txt
-# .env is loaded from .env.example if .env doesn't exist
-# For API: edit .env and set ENDEE_TOKEN=your-token
-```
-
-### Run the API
-
-```bash
-scripts\run.bat     # Windows
-./scripts/run.sh    # Linux/Mac
-# or: python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-
-- API: http://localhost:8000
-- Docs: http://localhost:8000/docs
-
-### Example Requests
+## Example Requests
 
 **Ingest:**
 ```bash
@@ -282,6 +246,8 @@ curl -X POST http://localhost:8000/api/v1/search \
 ```bash
 curl http://localhost:8000/api/v1/health
 ```
+
+See **For Evaluators** and **Full API** sections above for setup. For manual setup: `scripts\setup.bat` or `scripts/setup.sh`, then `scripts\run.bat` or `./scripts/run.sh`. API: http://localhost:8000, Docs: http://localhost:8000/docs.
 
 ### Run Tests
 
@@ -315,7 +281,6 @@ Text is chunked on sentence boundaries (via `re.split` on `. `, `? `, `! `) rath
 
 - **all-MiniLM-L6-v2** has a 512-token limit; character-based 512 is a safe upper bound for typical English text (~1–2 tokens per word).
 - Smaller chunks improve precision; larger chunks add context but risk mixing topics. 512 chars balances both.
-- Overlap (50 chars) helps avoid splitting important phrases across boundaries.
 
 ### Cosine similarity
 
@@ -357,6 +322,18 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup steps and how to run tests.
 - **Request ID**: Each request gets an `X-Request-ID` (from header or generated); included in logs and response headers for correlation
 - **Tests**: `conftest.py` provides `client` fixture; API tests mock Endee and embeddings
 - **Validation**: Pydantic schemas in `schemas.py`; 500 responses use generic messages (no internal details)
+
+---
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Tests fail with import errors | Ensure you're in the project root; run `scripts/setup-eval.bat` or `scripts/setup-eval.sh` |
+| API won't start: "Address already in use" | Port 8000 is in use; stop other processes or change port: `uvicorn app.main:app --port 8001` |
+| Health returns `degraded` | Endee not reachable; ensure Docker container is running and `ENDEE_BASE_URL` in `.env` matches |
+| Embedding model loads slowly | First request may take 30+ seconds; use lifespan preload (default) so health checks stay fast |
+| 504 Gateway Timeout on ingest/search | Endee is slow or unreachable; increase `ENDEE_TIMEOUT_SECONDS` or check network |
 
 ---
 
