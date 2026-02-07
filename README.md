@@ -342,11 +342,11 @@ Docker Compose starts **Endee** (port 8080) and the **API** (port 8000) together
 ## Future Improvements
 
 - **File upload**: Accept PDF/DOCX, extract text, then ingest.
-- **RAG assistant**: Add an LLM step to generate answers from retrieved chunks.
+- **RAG assistant**: Add a generation step to produce answers from retrieved chunks.
 - **Batch ingestion**: Async jobs for large document sets.
 - **Authentication**: API keys or OAuth for production.
 - **Hybrid search**: Use Endee’s sparse vectors (BM25) alongside dense embeddings.
-- **Pagination**: Cursor-based pagination for large result sets.
+- **Pagination**: Offset or keyset pagination for large result sets.
 
 ---
 
