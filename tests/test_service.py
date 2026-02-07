@@ -24,6 +24,23 @@ def test_chunk_text_sentences_splits_long_text():
     assert len(chunks) >= 2
 
 
+def test_chunk_text_sentences_caps_long_single_sentence():
+    """Very long sentence without period is split by max chunk size."""
+    text = "A" * 1000 + "B" * 500  # No sentence boundary
+    chunks = chunk_text_sentences(text, chunk_size=100)
+    assert len(chunks) >= 2
+    assert all(len(c) <= 512 for c in chunks)
+
+
+def test_sanitize_meta_handles_circular_ref():
+    """_sanitize_meta does not recurse infinitely on circular refs."""
+    from app.service import _sanitize_meta
+    d = {}
+    d["self"] = d
+    result = _sanitize_meta(d)
+    assert result == {"self": "[cyclic]"}
+
+
 @patch("app.service.upsert_vectors")
 @patch("app.service.embed_texts")
 @patch("app.service.chunk_text_sentences")
@@ -54,3 +71,21 @@ def test_search_mocked(embed_mock, query_mock):
     assert results[0]["id"] == "c1"
     assert results[0]["score"] == 0.95
     assert results[0]["text"] == "match"
+
+
+@patch("app.service.query_vectors")
+@patch("app.service.embed_single")
+def test_search_handles_malformed_endee_response(embed_mock, query_mock):
+    """Search tolerates malformed Endee response: similarity as str, id as int, meta None."""
+    embed_mock.return_value = [0.1] * 384
+    query_mock.return_value = [
+        {"id": 12345, "similarity": "0.8", "meta": None},
+        {"id": None, "similarity": None},
+    ]
+    results = search("test", top_k=5)
+    assert len(results) == 2
+    assert results[0]["id"] == "12345"
+    assert results[0]["score"] == 0.8
+    assert results[0]["text"] == ""
+    assert results[1]["id"] == ""
+    assert results[1]["score"] == 0.0

@@ -1,6 +1,10 @@
 """Request and response models for the API."""
 
-from pydantic import BaseModel, Field
+import re
+
+from pydantic import BaseModel, Field, field_validator
+
+_DOC_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]*$")
 
 
 class IngestTextRequest(BaseModel):
@@ -9,12 +13,30 @@ class IngestTextRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=1_000_000, description="Text content to ingest")
     doc_id: str | None = Field(None, max_length=256, description="Optional document identifier")
 
+    @field_validator("doc_id")
+    @classmethod
+    def doc_id_safe_chars(cls, v: str | None) -> str | None:
+        if v is None or v == "":
+            return v
+        if not _DOC_ID_PATTERN.fullmatch(v):
+            raise ValueError("doc_id must contain only letters, digits, underscore, hyphen")
+        return v
+
 
 class IngestDocumentRequest(BaseModel):
     """Payload for ingesting document content (same as text, semantically)."""
 
     content: str = Field(..., min_length=1, max_length=1_000_000, description="Document content to ingest")
     doc_id: str | None = Field(None, max_length=256, description="Optional document identifier")
+
+    @field_validator("doc_id")
+    @classmethod
+    def doc_id_safe_chars(cls, v: str | None) -> str | None:
+        if v is None or v == "":
+            return v
+        if not _DOC_ID_PATTERN.fullmatch(v):
+            raise ValueError("doc_id must contain only letters, digits, underscore, hyphen")
+        return v
 
 
 class SearchRequest(BaseModel):

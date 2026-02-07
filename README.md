@@ -305,6 +305,24 @@ Docker Compose starts **Endee** (port 8080) and the **API** (port 8000) together
 
 ---
 
+## Design Choices
+
+### Sentence-aware chunking
+
+Text is chunked on sentence boundaries (via `re.split` on `. `, `? `, `! `) rather than at fixed character offsets. This keeps chunks semantically coherent: a chunk tends to be one or more complete thoughts, which improves embedding quality and retrieval relevance.
+
+### Chunk size: 512 characters
+
+- **all-MiniLM-L6-v2** has a 512-token limit; character-based 512 is a safe upper bound for typical English text (~1–2 tokens per word).
+- Smaller chunks improve precision; larger chunks add context but risk mixing topics. 512 chars balances both.
+- Overlap (50 chars) helps avoid splitting important phrases across boundaries.
+
+### Cosine similarity
+
+Endee returns nearest neighbors by **cosine similarity**, which measures angle between vectors. It is scale-invariant, so it works well with normalized embeddings. Alternatives (e.g. Euclidean distance) would be sensitive to embedding magnitude; cosine is the standard for semantic search with unit-normalized vectors.
+
+---
+
 ## Limits & Rationale
 
 | Limit | Value | Rationale |
@@ -318,10 +336,11 @@ Docker Compose starts **Endee** (port 8080) and the **API** (port 8000) together
 
 ## Configuration
 
-| Variable         | Description                    | Default                     |
-|------------------|--------------------------------|-----------------------------|
-| `ENDEE_TOKEN`    | Endee API token                | (empty for dev)             |
-| `ENDEE_BASE_URL` | Custom Endee API URL           | (default cloud URL)         |
+| Variable                | Description                          | Default       |
+|-------------------------|--------------------------------------|---------------|
+| `ENDEE_TOKEN`           | Endee API token                      | (empty)       |
+| `ENDEE_BASE_URL`        | Custom Endee API URL                 | (cloud URL)   |
+| `ENDEE_TIMEOUT_SECONDS` | Timeout for Endee HTTP calls         | 30            |
 | `APP_ENV`        | Environment (development/prod) | development                 |
 | `LOG_LEVEL`      | Logging level                  | INFO                        |
 | `index_name`     | Endee index name               | knowledge_base              |
@@ -331,6 +350,8 @@ Docker Compose starts **Endee** (port 8080) and the **API** (port 8000) together
 ---
 
 ## Development
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup steps and how to run tests.
 
 - **Request flow**: API → Service (chunking/orchestration) → DB + Embeddings
 - **Request ID**: Each request gets an `X-Request-ID` (from header or generated); included in logs and response headers for correlation

@@ -71,6 +71,15 @@ def test_ingest_missing_text_fails(client: TestClient):
     assert resp.status_code == 422
 
 
+def test_ingest_invalid_doc_id_fails(client: TestClient, mock_endee, mock_embeddings):
+    """doc_id with invalid chars (slash, dot) returns 422."""
+    resp = client.post(
+        "/api/v1/ingest",
+        json={"text": "Hello world.", "doc_id": "invalid/id"},
+    )
+    assert resp.status_code == 422
+
+
 def test_ingest_document_success(client: TestClient, mock_endee, mock_embeddings):
     """Document ingestion with content field works."""
     resp = client.post("/api/v1/ingest/document", json={"content": "Document content here."})

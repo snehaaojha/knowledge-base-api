@@ -1,5 +1,11 @@
 """API routes for ingestion, search, and health."""
 
+# Two ingest routes (/ingest and /ingest/document) are kept separate for API clarity:
+# - /ingest uses "text" — common for direct paste, snippets, or API-to-API flows.
+# - /ingest/document uses "content" — aligns with file-extraction workflows where
+#   "content" denotes document body. Both delegate to the same service; schemas differ
+#   only in field names to match caller expectations.
+import asyncio
 import logging
 
 from fastapi import APIRouter, HTTPException, status
@@ -21,12 +27,12 @@ router = APIRouter()
 
 
 @router.post("/ingest", response_model=IngestResponse)
-def ingest_text(req: IngestTextRequest):
+async def ingest_text(req: IngestTextRequest):
     """
     Ingest raw text. Chunks, embeds, and stores in the vector database.
     """
     try:
-        result = service.ingest_text(req.text, req.doc_id)
+        result = await asyncio.to_thread(service.ingest_text, req.text, req.doc_id)
         return IngestResponse(
             doc_id=result["doc_id"],
             chunks_stored=result["chunks_stored"],
@@ -41,12 +47,12 @@ def ingest_text(req: IngestTextRequest):
 
 
 @router.post("/ingest/document", response_model=IngestResponse)
-def ingest_document(req: IngestDocumentRequest):
+async def ingest_document(req: IngestDocumentRequest):
     """
     Ingest document content. Same as /ingest but accepts 'content' field.
     """
     try:
-        result = service.ingest_text(req.content, req.doc_id)
+        result = await asyncio.to_thread(service.ingest_text, req.content, req.doc_id)
         return IngestResponse(
             doc_id=result["doc_id"],
             chunks_stored=result["chunks_stored"],
@@ -61,12 +67,12 @@ def ingest_document(req: IngestDocumentRequest):
 
 
 @router.post("/search", response_model=SearchResponse)
-def search(req: SearchRequest):
+async def search(req: SearchRequest):
     """
     Semantic search over ingested content. Returns top-k matches.
     """
     try:
-        results = service.search(req.query, req.top_k)
+        results = await asyncio.to_thread(service.search, req.query, req.top_k)
         return SearchResponse(
             query=req.query,
             results=[SearchResultItem(**r) for r in results],
@@ -80,22 +86,33 @@ def search(req: SearchRequest):
         )
 
 
-@router.get("/health", response_model=HealthResponse)
-def health():
-    """
-    Health check: verifies database and embedding model connectivity.
-    """
-    db_ok = False
-    embedding_ok = False
+def _check_db() -> bool:
+    """Sync DB check for use in thread."""
     try:
         db.ensure_index()
-        db_ok = True
+        return True
     except Exception as e:
         logger.warning("DB health check failed: %s", e)
+        return False
+
+
+def _check_embedding() -> bool:
+    """Sync embedding check for use in thread."""
     try:
         embeddings.get_embedding_model()
-        embedding_ok = True
+        return True
     except Exception as e:
         logger.warning("Embedding health check failed: %s", e)
+        return False
+
+
+@router.get("/health", response_model=HealthResponse)
+async def health():
+    """
+    Health check: verifies database and embedding model connectivity.
+    Runs checks in thread pool to avoid blocking the event loop.
+    """
+    db_ok = await asyncio.to_thread(_check_db)
+    embedding_ok = await asyncio.to_thread(_check_embedding)
     status_val = "healthy" if (db_ok and embedding_ok) else "degraded"
     return HealthResponse(status=status_val, db_ok=db_ok, embedding_ok=embedding_ok)
