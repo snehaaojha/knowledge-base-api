@@ -4,29 +4,56 @@ A production-style AI application using **Endee** as the vector database. It pro
 
 ---
 
-## Clone & Run (Evaluators)
+## For Evaluators: How to Run
 
-**Verify in under 2 minutes — no Endee token needed for tests.**
+**Prerequisites:** Python 3.10+ (that's it — no Docker, no API token)
 
-```bash
-# 1. Clone and enter
-git clone https://github.com/snehaaojha/knowledge-base-api.git
-cd knowledge-base-api
+### Quick verify (~1 min)
 
-# 2. Setup (creates venv, installs deps, creates .env from template)
-# Windows:
-scripts\setup.bat
-scripts\test.bat
+1. Clone and enter:
+   ```bash
+   git clone https://github.com/snehaaojha/knowledge-base-api.git
+   cd knowledge-base-api
+   ```
 
-# Linux/Mac:
-chmod +x scripts/*.sh
-./scripts/setup.sh
-./scripts/test.sh
-```
+2. Setup and run tests:
+   ```bash
+   # Windows
+   scripts\setup-eval.bat
+   scripts\test.bat
 
-Tests use mocked Endee and embeddings — **all 21 tests pass without any API token.** First-time setup may take 2–3 minutes (pip install pulls embedding dependencies).
+   # Linux / Mac
+   bash scripts/setup-eval.sh
+   bash scripts/test.sh
+   ```
 
-**To run the full API** (ingest + search): Edit `.env`, set `ENDEE_TOKEN` (get one at [endee.io](https://endee.io)), then run `scripts\run.bat` or `./scripts/run.sh`.
+   You should see `21 passed`. Done.
+
+---
+
+### Full API (ingest + search)
+
+**Prerequisites:** Docker, Python 3.10+
+
+1. **Clone and setup**
+   ```bash
+   git clone https://github.com/snehaaojha/knowledge-base-api.git
+   cd knowledge-base-api
+   scripts\setup.bat          # Windows
+   bash scripts/setup.sh      # Linux/Mac
+   ```
+
+2. **Start Endee** — pick one:
+   - `docker run -d -p 8080:8080 -v endee-data:/data --name endee-server endeeio/endee-server:latest`
+   - Or `scripts\docker-run.bat` / `bash scripts/docker-run.sh` (starts Endee + API)
+
+3. **Start the API** (if not using docker-run)
+   ```bash
+   scripts\run.bat            # Windows
+   bash scripts/run.sh        # Linux/Mac
+   ```
+
+4. **Try it:** http://localhost:8000/docs
 
 ---
 
