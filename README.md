@@ -1,6 +1,6 @@
 # Knowledge Base API
 
-A production-style AI application using **Endee** as the vector database. It provides semantic search over documents: ingest text, create embeddings, store in Endee, and retrieve top-k matches by similarity.
+A production-style semantic search application using **Endee** as the vector database. It provides semantic search over documents: ingest text, create embeddings, store in Endee, and retrieve top-k matches by similarity.
 
 ---
 
