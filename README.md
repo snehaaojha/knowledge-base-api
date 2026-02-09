@@ -14,7 +14,30 @@ A production-style semantic search application using **Endee** as the vector dat
    ```bash
    git clone https://github.com/snehaaojha/knowledge-base-api.git
    cd knowledge-base-api
+
    ```
+## Screenshots / Proof
+
+### 1) Tests
+![Tests](screenshots/01_tests_result.png)
+
+### 2) Endee running in Docker
+![Docker Endee](screenshots/02_docker_endee_running.png)
+
+### 3) API Running (Uvicorn)
+![API Running](screenshots/03_api_running_uvicorn.png)
+
+### 4) Swagger Docs
+![Swagger](screenshots/04_swagger_docs.png)
+
+### 5) Ingest Success
+![Ingest](screenshots/05_ingest_success.png)
+
+### 6) Search Success
+![Search](screenshots/06_search_response_200.png)
+
+### 7) Health OK
+![Health](screenshots/07_health_ok.png)
 
 2. Setup and run tests:
    ```bash
