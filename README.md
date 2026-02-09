@@ -34,7 +34,10 @@ A production-style semantic search application using **Endee** as the vector dat
 ![Ingest](screenshots/05_ingest_success.png)
 
 ### 6) Search Success
-![Search](screenshots/06_search_response_200.png)
+![Search Request](screenshots/06a_search_request_execute.png)
+
+![Search Response](screenshots/06b_search_response_200.png)
+
 
 ### 7) Health OK
 ![Health](screenshots/07_health_ok.png)
